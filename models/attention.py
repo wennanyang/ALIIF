@@ -114,7 +114,7 @@ class NonLocalAttention(nn.Module):
         B, C, H, W = x.shape
         q = self.proj_q3(x).reshape(B, C, H*W)
         k = self.proj_k3(x).reshape(B, C, H*W)
-        v = self.proj_v3(x).reshape(B, C, H*W)
+        # v = self.proj_v3(x).reshape(B, C, H*W)
         attention_3 = torch.einsum('b c m, b c n -> b m n', q, k)
         attention_3 = F.softmax(attention_3, dim=2)
         print(f"attention.shape = {attention_3.shape}")

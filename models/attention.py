@@ -19,9 +19,9 @@ def default_conv(in_channels, out_channels, kernel_size,stride=1, bias=True):
     return nn.Conv2d(
         in_channels, out_channels, kernel_size,
         padding=(kernel_size//2),stride=stride, bias=bias)
-@register("NLA")
+@register("nla")
 class NonLocalAttention(nn.Module):
-    def __init__(self, in_dim=3, K = 3, scale=2, dims=[6, 9], conv=default_conv):
+    def __init__(self, in_dim=3, K = 3, scale=2, dims=[6, 9]):
         super(NonLocalAttention, self).__init__()
         self.conv1 = nn.Conv2d(in_dim, dims[0], 3, 2, 1, bias=False)
         self.conv2 = nn.Conv2d(dims[0], dims[1], 3, 2, 1, bias=False)
@@ -44,8 +44,11 @@ class NonLocalAttention(nn.Module):
         self.proj_q1 = nn.Conv2d(in_dim, in_dim, 1, 1, 0, bias=False)
         self.proj_k1 = nn.Conv2d(in_dim, in_dim, 1, 1, 0, bias=False)
         # self.proj_v1 = nn.Conv2d(dims[1], dims[1], 1, 1, 0, bias=False)
+    def gen_feature(self, x):
+        self.x1 = x
+        self.x2 = self.conv1(x)
+        self.x3 = self.conv2(self.x2)
 
-        
     def expand_indices(self, topK_indices, scale, now_shape):
         '''
         topK_indices: [B, C, H*W], 每个点topK个近似的点
@@ -115,18 +118,17 @@ class NonLocalAttention(nn.Module):
         attention_scores = attention_scores / (d_k ** 0.5)
         attention_weights = F.softmax(attention_scores, dim=2)
         return attention_weights
-    
     def non_local_attention(self):
         '''
         第一阶段 在最小的形状上
         '''
         x = self.x3
-        B, C, H, W = x.shape
-        q = self.proj_q3(x).reshape(B, C, H*W)
-        k = self.proj_k3(x).reshape(B, C, H*W)
+        B3, C3, H3, W3 = x.shape
+        q = self.proj_q3(x).reshape(B3, C3, H3*W3)
+        k = self.proj_k3(x).reshape(B3, C3, H3*W3)
         # v = self.proj_v3(x).reshape(B, C, H*W)
         attention_3 = torch.einsum('b c m, b c n -> b m n', q, k)
-        d_k_3 = C ** 0.5
+        d_k_3 = C3 ** 0.5
         attention_3 = attention_3 / d_k_3
         attention_3 = F.softmax(attention_3, dim=2)
         # 取出前self.K个most similar的
@@ -135,7 +137,7 @@ class NonLocalAttention(nn.Module):
         第二阶段
         '''
         # 将indices扩展
-        topK_indices_3_expand = self.expand_indices(topK_indices_3, self.scale, (H, W))
+        topK_indices_3_expand = self.expand_indices(topK_indices_3, self.scale, (H3, W3))
         # 利用indices采样
         attention2 = self.attention(self.x2, topK_indices_3_expand, 2)
         _, topK_indices_2 = torch.topk(attention2, self.K, dim=2)
@@ -149,16 +151,14 @@ class NonLocalAttention(nn.Module):
         最后输出阶段
         '''
         # 得到前K个most similar
-        _, topK_indices = torch.topk(attention1, self.K, dim=2)
-        
+        _, topK_indices_1 = torch.topk(attention1, self.K, dim=2)
         B1, C1, H1, W1 = self.x1.shape
-
-        
         Q = self.q
-        topK_indices = topK_indices.unsqueeze(1).expand(-1, C1, -1, -1)
+        # 重复匹配通道
+        topK_indices_1_expand = topK_indices_1.unsqueeze(1).expand(-1, C1, -1, -1)
         K_ = [None] * (H1 * W1)
         for i in range(H1 * W1):
-            K_[i] = torch.gather(self.k, dim=2, index=topK_indices[:, :, i, :])
+            K_[i] = torch.gather(self.k, dim=2, index=topK_indices_1_expand[:, :, i, :])
         
         K = torch.stack(K_, dim=2)
         V = K
@@ -166,23 +166,31 @@ class NonLocalAttention(nn.Module):
         K = K.permute(0, 2, 3, 1) # [B, N, K, C]
         V = V.permute(0, 2, 3, 1) # [B, N, k, C]
         attention_scores = torch.einsum('bnc,bnkc->bnk', Q, K)
-        d_k = self.x1.shape[1]
+        d_k = C1
         attention_scores = attention_scores / (d_k ** 0.5)
         attention_weights = F.softmax(attention_scores, dim=2) # [B, N, K]
         output = torch.einsum('bnk,bnkc->bnc', attention_weights, V) # [B, N, C]
-        return output
+        return output, attention_3, topK_indices_1
+    def get_attention_map(self, x):
+        self.gen_feature(x)
+        B, C, H, W = x.shape
+        # attention_weights=[B, dims[1], H*W/scale, H*W/scale]
+        # indices = [B, H*W, K]
+        _, attention_weights, indices = self.non_local_attention()
+        # indices = [B, H*W, K, 2] 2代表一个坐标
+        indices = indices.unsqueeze(-1).repeat(1, 1, 1, 2)
+        indices[:, :, :, 0] //= H
+        indices[:, :, :, 1] %= W
+
+        return attention_weights, indices
 
     def forward(self, x):
-        self.x1 = x
-        self.x2 = self.conv1(x)
-        self.x3 = self.conv2(self.x2)
+        self.gen_feature(x)
         # print(f"self.x1.shape = {self.x1.shape}")
         # print(f"self.x2.shape = {self.x2.shape}")
         # print(f"self.x3.shape = {self.x3.shape}")
-
-        output = self.non_local_attention()
+        B, C, H, W = x.shape
+        output, _, _ = self.non_local_attention()
+        output = output.permute(0, 2, 1).reshape(B, C, H, W)
         print(f"output.shape = {output.shape}")
         return output
-        
-        
-

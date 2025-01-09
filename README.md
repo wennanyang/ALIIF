@@ -1,30 +1,4 @@
-# LIIF
-
-This repository contains the official implementation for LIIF introduced in the following paper:
-
-[**Learning Continuous Image Representation with Local Implicit Image Function**](https://arxiv.org/abs/2012.09161)
-<br>
-[Yinbo Chen](https://yinboc.github.io/), [Sifei Liu](https://www.sifeiliu.net/), [Xiaolong Wang](https://xiaolonw.github.io/)
-<br>
-CVPR 2021 (Oral)
-
-The project page with video is at https://yinboc.github.io/liif/.
-
-<img src="https://user-images.githubusercontent.com/10364424/102488232-b3c96080-40a6-11eb-905f-a1a21b7c6f8a.png" width="200">
-
-### Citation
-
-If you find our work useful in your research, please cite:
-
-```
-@inproceedings{chen2021learning,
-  title={Learning continuous image representation with local implicit image function},
-  author={Chen, Yinbo and Liu, Sifei and Wang, Xiaolong},
-  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition},
-  pages={8628--8638},
-  year={2021}
-}
-```
+# ALIIF
 
 ### Environment
 - Python 3

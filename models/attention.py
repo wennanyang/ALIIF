@@ -155,7 +155,7 @@ class NonLocalAttention(nn.Module):
         B1, C1, H1, W1 = self.x1.shape
         Q = self.q
         # 重复匹配通道
-        topK_indices_1_expand = topK_indices_1.unsqueeze(1).expand(-1, C1, -1, -1)
+        topK_indices_1_expand = topK_indices_1.clone().unsqueeze(1).expand(-1, C1, -1, -1)
         K_ = [None] * (H1 * W1)
         for i in range(H1 * W1):
             K_[i] = torch.gather(self.k, dim=2, index=topK_indices_1_expand[:, :, i, :])

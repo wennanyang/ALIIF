@@ -21,7 +21,7 @@ def default_conv(in_channels, out_channels, kernel_size,stride=1, bias=True):
         padding=(kernel_size//2),stride=stride, bias=bias)
 @register("NLA")
 class NonLocalAttention(nn.Module):
-    def __init__(self, in_dim=3, K = 3, dims=[6, 9], conv=default_conv):
+    def __init__(self, in_dim=3, K = 3, scale=2, dims=[6, 9], conv=default_conv):
         super(NonLocalAttention, self).__init__()
         self.conv1 = nn.Conv2d(in_dim, dims[0], 3, 2, 1, bias=False)
         self.conv2 = nn.Conv2d(dims[0], dims[1], 3, 2, 1, bias=False)
@@ -29,6 +29,7 @@ class NonLocalAttention(nn.Module):
         self.x2 = None
         self.x3 = None
         self.K = K
+        self.scale = scale
         self.q = None
         self.v = None
         # 第3层使用的proj
@@ -36,15 +37,15 @@ class NonLocalAttention(nn.Module):
         self.proj_k3 = nn.Conv2d(dims[1], dims[1], 1, 1, 0, bias=False)
         # self.proj_v3 = nn.Conv2d(dims[1], dims[1], 1, 1, 0, bias=False)
         # 第2层使用的proj
-        self.proj_q2 = nn.Conv2d(dims[1], dims[1], 1, 1, 0, bias=False)
-        self.proj_k2 = nn.Conv2d(dims[1], dims[1], 1, 1, 0, bias=False)
+        self.proj_q2 = nn.Conv2d(dims[0], dims[0], 1, 1, 0, bias=False)
+        self.proj_k2 = nn.Conv2d(dims[0], dims[0], 1, 1, 0, bias=False)
         # self.proj_v2 = nn.Conv2d(dims[1], dims[1], 1, 1, 0, bias=False)
         # 第1层使用的proj
-        self.proj_q1 = nn.Conv2d(dims[1], dims[1], 1, 1, 0, bias=False)
-        self.proj_k1 = nn.Conv2d(dims[1], dims[1], 1, 1, 0, bias=False)
+        self.proj_q1 = nn.Conv2d(in_dim, in_dim, 1, 1, 0, bias=False)
+        self.proj_k1 = nn.Conv2d(in_dim, in_dim, 1, 1, 0, bias=False)
         # self.proj_v1 = nn.Conv2d(dims[1], dims[1], 1, 1, 0, bias=False)
 
-        self.scale = dims[1] ** -0.5
+        
     def expand_indices(self, topK_indices, scale, now_shape):
         '''
         topK_indices: [B, C, H*W], 每个点topK个近似的点
@@ -64,13 +65,13 @@ class NonLocalAttention(nn.Module):
         # 先把水平方向上的重复一遍
         new_topK = new_topK.repeat_interleave(scale, dim=2)
         for s in range(scale):
-            new_topK = new_topK[:, : s : (s + 1) * scale] + s
+            new_topK[:, : s : (s + 1) * scale] += s
         # 得到了每个点第一行的排列，将每一行重复scale次
         # 就得到了每个点扩展成的(scale, scale)的大小
         # 无需考虑顺序问题，因为索引大小表示前后，计算出值排序即可
         new_topK = new_topK.repeat(1, 1, scale)
         for s in range(scale):
-            new_topK = new_topK[:, :, s : (s + 1) * scale * K] + scale * W
+            new_topK[:, :, s : (s + 1) * scale * K] += scale * W
         new_topK, _ = torch.sort(new_topK, dim=2)
         # 接着需要注意顺序，先每个点重复scale次，接着分组重复scale次
         new_topK = new_topK.repeat_interleave(scale, dim=1)
@@ -82,6 +83,10 @@ class NonLocalAttention(nn.Module):
         result = torch.cat(repeated_segments, dim=1)
         return result
     def attention(self, x, indices, layer=2):
+        '''
+        x: [B, C, H, W], 是待求张量
+        indices: [B, H*W, K], K个索引
+        '''
         B, C, H, W = x.shape
         if layer == 2:
             q = self.proj_q2(x).reshape(B, C, H*W)
@@ -94,7 +99,12 @@ class NonLocalAttention(nn.Module):
             self.q = q
             self.k = k
             # self.v = v
-        k = torch.gather(k, dim=2, index=indices)
+        indices = indices.unsqueeze(1).expand(-1, C, -1, -1)
+        k_ = [None] * (H*W)
+        # 对于每个采样点取样
+        for i in range(H*W):
+            k_[i] = torch.gather(k, dim=2, index=indices[:, :, i, :])
+        k = torch.stack(k_, dim=2) # [B, C, N, K]
         # 将q, k, v转置，通道放在最后面
         # q=[B, N, C], k,v =[B, N, K, C]
         q = q.permute(0, 2, 1)
@@ -116,11 +126,11 @@ class NonLocalAttention(nn.Module):
         k = self.proj_k3(x).reshape(B, C, H*W)
         # v = self.proj_v3(x).reshape(B, C, H*W)
         attention_3 = torch.einsum('b c m, b c n -> b m n', q, k)
+        d_k_3 = C ** 0.5
+        attention_3 = attention_3 / d_k_3
         attention_3 = F.softmax(attention_3, dim=2)
-        print(f"attention.shape = {attention_3.shape}")
         # 取出前self.K个most similar的
         _, topK_indices_3 = torch.topk(attention_3, self.K, dim=2)
-        print(f"topK_indices = {topK_indices_3.shape}")
         '''
         第二阶段
         '''
@@ -139,9 +149,18 @@ class NonLocalAttention(nn.Module):
         最后输出阶段
         '''
         # 得到前K个most similar
-        topK_indices = torch.topk(attention1, self.K, dim=2)
+        _, topK_indices = torch.topk(attention1, self.K, dim=2)
+        
+        B1, C1, H1, W1 = self.x1.shape
+
+        
         Q = self.q
-        K = torch.gather(self.k, dim=2, index=topK_indices)
+        topK_indices = topK_indices.unsqueeze(1).expand(-1, C1, -1, -1)
+        K_ = [None] * (H1 * W1)
+        for i in range(H1 * W1):
+            K_[i] = torch.gather(self.k, dim=2, index=topK_indices[:, :, i, :])
+        
+        K = torch.stack(K_, dim=2)
         V = K
         Q = Q.permute(0, 2, 1) # [B, N, C]
         K = K.permute(0, 2, 3, 1) # [B, N, K, C]
@@ -162,6 +181,7 @@ class NonLocalAttention(nn.Module):
         # print(f"self.x3.shape = {self.x3.shape}")
 
         output = self.non_local_attention()
+        print(f"output.shape = {output.shape}")
         return output
         
         

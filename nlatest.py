@@ -8,9 +8,9 @@ def main():
     model = NonLocalAttention()
     model.to(device=device)
     model(batch)
-    tensor = torch.tensor([[1, 2], [3, 4]])
-    tensor = tensor.repeat(1, 2)
-    print(tensor)
+    # tensor = torch.tensor([[1, 2], [3, 4]])
+    # tensor = tensor.repeat(1, 2)
+    # print(tensor)
 
 if __name__ == '__main__':
     main()

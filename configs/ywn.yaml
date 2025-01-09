@@ -8,10 +8,10 @@ train_dataset:
   wrapper:
     name: sr-implicit-downsampled
     args:
-      inp_size: 36
+      inp_size: 128
       scale_max: 4
       augment: true
-      sample_q: 1296
+      sample_q: 2048
   batch_size: 16
 
 val_dataset:
@@ -25,9 +25,9 @@ val_dataset:
   wrapper:
     name: sr-implicit-downsampled
     args:
-      inp_size: 36
+      inp_size: 128
       scale_max: 4
-      sample_q: 1296
+      sample_q: 2048
   batch_size: 16
 data_norm:
   inp: {sub: [0.5], div: [0.5]}
@@ -40,11 +40,19 @@ model:
       name: edsr-baseline
       args:
         no_upsampling: true
+      
     imnet_spec:
       name: mlp
       args:
         out_dim: 3
         hidden_list: [256, 256, 256, 256]
+    nla_spec:
+      name: nla
+      args:
+        in_dim: 3
+        K: 4
+        scale: 4
+        dims: [6, 9]
 
 optimizer:
   name: adam
@@ -56,4 +64,4 @@ multi_step_lr:
   gamma: 0.5
 
 epoch_val: 1
-epoch_save: 100
+epoch_save: 20

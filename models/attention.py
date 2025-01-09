@@ -5,26 +5,33 @@ import einops
 from models import register
 class BasicBlock(nn.Sequential):
     def __init__(
-        self, conv, in_channels, out_channels, kernel_size, stride=1, bias=True,
+        self, conv, in_channels, out_channels, kernel_size, stride=2, bias=True,
         bn=False, act=nn.PReLU()):
 
-        m = [conv(in_channels, out_channels, kernel_size, bias=bias)]
+        m = [conv(in_channels, out_channels, kernel_size, stride, bias=bias)]
         if bn:
             m.append(nn.BatchNorm2d(out_channels))
         if act is not None:
             m.append(act)
 
         super(BasicBlock, self).__init__(*m)
-def default_conv(in_channels, out_channels, kernel_size,stride=1, bias=True):
+def default_conv(in_channels, out_channels, kernel_size,stride=2, bias=True):
     return nn.Conv2d(
         in_channels, out_channels, kernel_size,
         padding=(kernel_size//2),stride=stride, bias=bias)
+
 @register("nla")
 class NonLocalAttention(nn.Module):
-    def __init__(self, in_dim=3, K = 3, scale=2, dims=[6, 9]):
+    def __init__(self, in_dim=3, K=4, scale=4, dims=[6, 9]):
         super(NonLocalAttention, self).__init__()
-        self.conv1 = nn.Conv2d(in_dim, dims[0], 3, 2, 1, bias=False)
-        self.conv2 = nn.Conv2d(dims[0], dims[1], 3, 2, 1, bias=False)
+        # kernel_size = 3, stride = 2, padding = 1, /2
+        # kernel_size = 5, strid = 4, padding = 0, /4
+        self.block1 = BasicBlock(default_conv, in_channels=in_dim, out_channels=dims[0], 
+                                 kernel_size=5, stride=scale, bn=True, act=nn.ReLU())
+        self.block2 = BasicBlock(default_conv, in_channels=dims[0], out_channels=dims[1], 
+                                 kernel_size=5, stride=scale, bn=True, act=nn.ReLU())
+        # self.conv1 = nn.Conv2d(in_dim, dims[0], 3, 2, 1, bias=False)
+        # self.conv2 = nn.Conv2d(dims[0], dims[1], 3, 2, 1, bias=False)
         self.x1 = None
         self.x2 = None
         self.x3 = None
@@ -46,8 +53,8 @@ class NonLocalAttention(nn.Module):
         # self.proj_v1 = nn.Conv2d(dims[1], dims[1], 1, 1, 0, bias=False)
     def gen_feature(self, x):
         self.x1 = x
-        self.x2 = self.conv1(x)
-        self.x3 = self.conv2(self.x2)
+        self.x2 = self.block1(x)
+        self.x3 = self.block2(self.x2)
 
     def expand_indices(self, topK_indices, scale, now_shape):
         '''
@@ -67,19 +74,19 @@ class NonLocalAttention(nn.Module):
             new_topK[:, :, k] = j * scale * scale + i * scale
         # 先把水平方向上的重复一遍
         new_topK = new_topK.repeat_interleave(scale, dim=2)
-        for s in range(scale):
-            new_topK[:, : s : (s + 1) * scale] += s
+        for k in range(K):
+            new_topK[:, :, k * scale : (k + 1) * scale] += torch.arange(scale).view(1, 1, -1).to(new_topK)
         # 得到了每个点第一行的排列，将每一行重复scale次
         # 就得到了每个点扩展成的(scale, scale)的大小
         # 无需考虑顺序问题，因为索引大小表示前后，计算出值排序即可
         new_topK = new_topK.repeat(1, 1, scale)
         for s in range(scale):
-            new_topK[:, :, s : (s + 1) * scale * K] += scale * W
+            new_topK[:, :, s * scale * K : (s + 1) * scale * K] += (scale * W)
         new_topK, _ = torch.sort(new_topK, dim=2)
         # 接着需要注意顺序，先每个点重复scale次，接着分组重复scale次
         new_topK = new_topK.repeat_interleave(scale, dim=1)
         # 每一行有W * scale个元素，所以按照这个分割每一行
-        split_tensors = torch.split(new_topK, W * scale, dim=2)
+        split_tensors = torch.split(new_topK, W * scale, dim=1)
         # 将每一行重复scale次
         repeated_segments = [segment.repeat(1, scale, 1) for segment in split_tensors]
         # result = [B, N*scale*scale, K*scale*scale]
@@ -177,7 +184,7 @@ class NonLocalAttention(nn.Module):
         # attention_weights=[B, dims[1], H*W/scale, H*W/scale]
         # indices = [B, H*W, K]
         _, attention_weights, indices = self.non_local_attention()
-        # indices = [B, H*W, K, 2] 2代表一个坐标
+        # indices = [B, H*W, K, 2] 2代表一个坐标[H, W], K个坐标
         indices = indices.unsqueeze(-1).repeat(1, 1, 1, 2)
         indices[:, :, :, 0] //= H
         indices[:, :, :, 1] %= W
@@ -192,5 +199,5 @@ class NonLocalAttention(nn.Module):
         B, C, H, W = x.shape
         output, _, _ = self.non_local_attention()
         output = output.permute(0, 2, 1).reshape(B, C, H, W)
-        print(f"output.shape = {output.shape}")
-        return output
+        # print(f"output.shape = {output.shape}")
+        return x

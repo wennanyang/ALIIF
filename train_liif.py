@@ -208,10 +208,10 @@ def main(config_, save_path):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', default="/home/ywn/graduate/liif/configs/ywn.yaml")
+    parser.add_argument('--config', default="/home/ywn/graduate/ALIIF/configs/ywn.yaml")
     parser.add_argument('--name', default=None)
     parser.add_argument('--tag', default=None)
-    parser.add_argument('--gpu', default='2')
+    parser.add_argument('--gpu', default='0, 1, 2')
     args = parser.parse_args()
 
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu

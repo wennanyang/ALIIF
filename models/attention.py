@@ -181,13 +181,14 @@ class NonLocalAttention(nn.Module):
     def get_attention_map(self, x):
         self.gen_feature(x)
         B, C, H, W = x.shape
-        # attention_weights=[B, dims[1], H*W/scale, H*W/scale]
+        # attention_weights=[B, H*W/scale, H*W/scale]
         # indices = [B, H*W, K]
         _, attention_weights, indices = self.non_local_attention()
         # indices = [B, H*W, K, 2] 2代表一个坐标[H, W], K个坐标
         indices = indices.unsqueeze(-1).repeat(1, 1, 1, 2)
-        indices[:, :, :, 0] //= H
-        indices[:, :, :, 1] %= W
+        indices[:, :, :, 0] = torch.div(indices[:, :, :, 0], H, rounding_mode='trunc')
+         
+        indices[:, :, :, 1] = torch.remainder(indices[:, :, :, 1], W)
 
         return attention_weights, indices
 

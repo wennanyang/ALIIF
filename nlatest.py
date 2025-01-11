@@ -33,4 +33,4 @@ def main():
     # print(tensor)
 
 if __name__ == '__main__':
-    dot_multiply()
+    main()

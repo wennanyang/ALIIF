@@ -39,6 +39,10 @@ class NonLocalAttention(nn.Module):
         self.scale = scale
         self.q = None
         self.v = None
+        # 画attention map图的数据
+        self.indices_3 = None
+        self.indices = None
+        self.attention_weights = None
         # 第3层使用的proj
         self.proj_q3 = nn.Conv2d(dims[1], dims[1], 1, 1, 0, bias=False)
         self.proj_k3 = nn.Conv2d(dims[1], dims[1], 1, 1, 0, bias=False)
@@ -81,7 +85,8 @@ class NonLocalAttention(nn.Module):
         # 无需考虑顺序问题，因为索引大小表示前后，计算出值排序即可
         new_topK = new_topK.repeat(1, 1, scale)
         for s in range(scale):
-            new_topK[:, :, s * scale * K : (s + 1) * scale * K] += (scale * W)
+            new_topK[:, :, s * scale * K : (s + 1) * scale * K] += (s * scale * W)
+
         new_topK, _ = torch.sort(new_topK, dim=2)
         # 接着需要注意顺序，先每个点重复scale次，接着分组重复scale次
         new_topK = new_topK.repeat_interleave(scale, dim=1)
@@ -147,18 +152,24 @@ class NonLocalAttention(nn.Module):
         topK_indices_3_expand = self.expand_indices(topK_indices_3, self.scale, (H3, W3))
         # 利用indices采样
         attention2 = self.attention(self.x2, topK_indices_3_expand, 2)
-        _, topK_indices_2 = torch.topk(attention2, self.K, dim=2)
+        _, temp_indices_2 = torch.topk(attention2, self.K, dim=2)
+        # temp_indices_2 = [B, H2*W2, K]
+        # 从topK_indices_3_expand中选择K个索引，得到在第二阶段的实际索引值
+        topK_indices_2 = torch.gather(topK_indices_3_expand, dim=2, index=temp_indices_2)
         '''
-        第三阶段
-        '''
+        # 第三阶段
+        # '''
         topK_indices_2_expand = self.expand_indices(topK_indices_2, self.scale, 
                                             (self.x2.shape[-2], self.x2.shape[-1]))
         attention1 = self.attention(self.x1, topK_indices_2_expand, 1)
+
+        # 在K*scale*scale中得到前K个most similar
+        _, temp_indices_1 = torch.topk(attention1, self.K, dim=2)
+        # 这里才是实际的索引值
+        topK_indices_1 = torch.gather(topK_indices_2_expand, dim=2, index=temp_indices_1)
         '''
         最后输出阶段
         '''
-        # 得到前K个most similar
-        _, topK_indices_1 = torch.topk(attention1, self.K, dim=2)
         B1, C1, H1, W1 = self.x1.shape
         Q = self.q
         # 重复匹配通道
@@ -177,28 +188,39 @@ class NonLocalAttention(nn.Module):
         attention_scores = attention_scores / (d_k ** 0.5)
         attention_weights = F.softmax(attention_scores, dim=2) # [B, N, K]
         output = torch.einsum('bnk,bnkc->bnc', attention_weights, V) # [B, N, C]
-        return output, attention_3, topK_indices_1
+        # 用于attention map的数据
+        self.attention_weights = attention_weights
+        self.indices = topK_indices_1
+        self.indices_3 = topK_indices_3
+        return output
     def get_attention_map(self, x):
         self.gen_feature(x)
+        self.non_local_attention()
+
         B, C, H, W = x.shape
         # attention_weights=[B, H*W/scale, H*W/scale]
         # indices = [B, H*W, K]
-        _, attention_weights, indices = self.non_local_attention()
+        attention_weights = self.attention_weights,
+        indices = self.attention_weights 
+        indices_3 = self.indices_3
         # indices = [B, H*W, K, 2] 2代表一个坐标[H, W], K个坐标
         indices = indices.unsqueeze(-1).repeat(1, 1, 1, 2)
         indices[:, :, :, 0] = torch.div(indices[:, :, :, 0], H, rounding_mode='trunc')
          
         indices[:, :, :, 1] = torch.remainder(indices[:, :, :, 1], W)
-
-        return attention_weights, indices
+        indices_3 = indices.unsqueeze(-1).repeat(1, 1, 1, 2)
+        indices_3[:, :, :, 0] = torch.div(indices_3[:, :, :, 0], H // self.scale // self.scale, rounding_mode='trunc')
+        indices_3[:, :, :, 1] = torch.remainder(indices_3[:, :, :, 1], H // self.scale // self.scale)
+        return attention_weights, indices, indices_3
 
     def forward(self, x):
         self.gen_feature(x)
+        self.non_local_attention()
         # print(f"self.x1.shape = {self.x1.shape}")
         # print(f"self.x2.shape = {self.x2.shape}")
         # print(f"self.x3.shape = {self.x3.shape}")
         B, C, H, W = x.shape
-        output, _, _ = self.non_local_attention()
+        output = self.non_local_attention()
         output = output.permute(0, 2, 1).reshape(B, C, H, W)
-        # print(f"output.shape = {output.shape}")
+        print(f"output.shape = {output.shape}")
         return x

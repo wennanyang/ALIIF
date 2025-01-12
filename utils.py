@@ -116,7 +116,6 @@ def make_coord(shape, ranges=None, flatten=True):
         ret = ret.view(-1, ret.shape[-1])
     return ret
 
-
 def to_pixel_samples(img):
     """ Convert the image to coord-RGB pairs.
         img: Tensor, (3, H, W)

@@ -64,4 +64,4 @@ multi_step_lr:
   gamma: 0.5
 
 epoch_val: 1
-epoch_save: 20
+epoch_save: 3

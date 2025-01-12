@@ -41,7 +41,7 @@ def plt_and_save_map(model_path, img_path):
 
     # attention_weights=[B, H*W/(scale*scale), H*W/(scale*scale)]
     # index=[B, H*W, K, 2]
-    attention_weights, index = model.nla.get_attention_map(input)
+    attention_weights, index, index_3 = model.nla.get_attention_map(input)
     B, N, _, _ = index.shape
     scale  = int(math.sqrt(N // attention_weights.shape[1]))
     H = int(math.sqrt(N))
@@ -51,9 +51,10 @@ def plt_and_save_map(model_path, img_path):
     random_index = np.random.randint(1, N, size=(1))[0]
     index = index.cpu().detach().numpy()
     # 第一个
+    plt.figure(figsize=(16, 8))
+
+    plt.subplot(1, 2, 1)
     data = weights[index_mapping(random_index, scale, H), :, :]
-    # axes[0, 0].imshow(data)
-    plt.figure(figsize=(8, 8))
     plt.imshow(image)
     sns.heatmap(data, cmap='rainbow', alpha=0.8,cbar=False)
     x = index[0, random_index, :, 1]
@@ -64,8 +65,33 @@ def plt_and_save_map(model_path, img_path):
     plt.scatter(q_x, q_y, marker='*',s=50 ,color='black')
     plt.axis('off')
     plt.tight_layout(pad=0)
-    print(f"q_x = {q_x}, q_y = {q_y}")
-    plt.savefig(f"./map/attention_map{q_x, q_y}.png")
+    plt.title(f"qx = {q_x}, qy = {q_y}")
+    # plt.savefig(f"./map/attention_map{q_x, q_y}.png")
+    # 不插值情况下的检查
+    index3 = index_mapping(random_index, scale, H)
+    
+    h , w = H // scale, W // scale
+    data1 = attention_weights[0][index3, :].reshape(h, w).cpu().detach().numpy()
+    # _, topK = torch.topk(attention_weights, 4, dim=2, largest=True)
+    # print(topK.shape)
+    # topK = topK[0].cpu().detach().numpy()
+    
+    plt.subplot(1, 2, 2)
+    plt.imshow(image)
+    sns.heatmap(data1, cmap='rainbow', alpha=0.8, cbar=False)
+    x = index_3[0, index3, :, 1].cpu().detach().numpy()
+    y = index_3[0, index3, :, 0].cpu().detach().numpy()
+    plt.scatter(x, y, marker='o', s=20, color='white')
+    q_x = index3 % w
+    q_y = index3 // h
+
+    plt.scatter(q_x, q_y, marker='*',s=50 ,color='black')
+    plt.axis('off')
+    plt.tight_layout(pad=0)
+    plt.title(f"qx = {q_x}, qy = {q_y}")
+    print(f"random_index = {random_index}")
+    
+    plt.savefig(f"./map/attention_map{random_index}.png")
 def main(model_path, img_path):
     plt_and_save_map(model_path, img_path)
 

@@ -189,26 +189,25 @@ class NonLocalAttention(nn.Module):
         attention_weights = F.softmax(attention_scores, dim=2) # [B, N, K]
         output = torch.einsum('bnk,bnkc->bnc', attention_weights, V) # [B, N, C]
         # 用于attention map的数据
-        self.attention_weights = attention_weights
+        self.attention_weights = attention_3
         self.indices = topK_indices_1
         self.indices_3 = topK_indices_3
+        # 返回
         return output
     def get_attention_map(self, x):
         self.gen_feature(x)
         self.non_local_attention()
-
         B, C, H, W = x.shape
         # attention_weights=[B, H*W/scale, H*W/scale]
         # indices = [B, H*W, K]
-        attention_weights = self.attention_weights,
-        indices = self.attention_weights 
+        attention_weights = self.attention_weights
+        indices = self.indices 
         indices_3 = self.indices_3
         # indices = [B, H*W, K, 2] 2代表一个坐标[H, W], K个坐标
         indices = indices.unsqueeze(-1).repeat(1, 1, 1, 2)
         indices[:, :, :, 0] = torch.div(indices[:, :, :, 0], H, rounding_mode='trunc')
-         
         indices[:, :, :, 1] = torch.remainder(indices[:, :, :, 1], W)
-        indices_3 = indices.unsqueeze(-1).repeat(1, 1, 1, 2)
+        indices_3 = indices_3.unsqueeze(-1).repeat(1, 1, 1, 2)
         indices_3[:, :, :, 0] = torch.div(indices_3[:, :, :, 0], H // self.scale // self.scale, rounding_mode='trunc')
         indices_3[:, :, :, 1] = torch.remainder(indices_3[:, :, :, 1], H // self.scale // self.scale)
         return attention_weights, indices, indices_3
@@ -222,5 +221,4 @@ class NonLocalAttention(nn.Module):
         B, C, H, W = x.shape
         output = self.non_local_attention()
         output = output.permute(0, 2, 1).reshape(B, C, H, W)
-        print(f"output.shape = {output.shape}")
         return x

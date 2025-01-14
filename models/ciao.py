@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from utils import make_coord
 from attention import NonLocalAttention
 import models
-
+from models import register
 class LocalImplicitSRNet(nn.Module):
     """
     The subclasses should define `generator` with `encoder` and `imnet`,
@@ -21,9 +21,10 @@ class LocalImplicitSRNet(nn.Module):
 
     def __init__(self,
                  encoder_spec,
-                 imnet_q,
-                 imnet_k,
-                 imnet_v,
+                 imnet_q_spec,
+                 imnet_k_spec,
+                 imnet_v_spec,
+                 nla_spec,
                  query_mlp,
                  key_mlp,
                  value_mlp,
@@ -48,30 +49,30 @@ class LocalImplicitSRNet(nn.Module):
         # 输入通道
         imnet_dim = self.encoder.mid_channels
         if self.feat_unfold:
-            imnet_q['in_dim'] = imnet_dim * 9
-            imnet_k['in_dim'] = imnet_k['out_dim'] = imnet_dim * 9
-            imnet_v['in_dim'] = imnet_v['out_dim'] = imnet_dim * 9
+            imnet_q_spec['in_dim'] = imnet_dim * 9
+            imnet_k_spec['in_dim'] = imnet_k_spec['out_dim'] = imnet_dim * 9
+            imnet_v_spec['in_dim'] = imnet_v_spec['out_dim'] = imnet_dim * 9
         else:
-            imnet_q['in_dim'] = imnet_dim
-            imnet_k['in_dim'] = imnet_k['out_dim'] = imnet_dim
-            imnet_v['in_dim'] = imnet_v['out_dim'] = imnet_dim
+            imnet_q_spec['in_dim'] = imnet_dim
+            imnet_k_spec['in_dim'] = imnet_k_spec['out_dim'] = imnet_dim
+            imnet_v_spec['in_dim'] = imnet_v_spec['out_dim'] = imnet_dim
         # coord and cell
-        imnet_k['in_dim'] += 4
-        imnet_v['in_dim'] += 4
+        imnet_k_spec['in_dim'] += 4
+        imnet_v_spec['in_dim'] += 4
         # 这里是多尺度的个数，为1
         if self.non_local_attn:
-            imnet_q['in_dim'] += imnet_dim*len(multi_scale)
-            imnet_v['in_dim'] += imnet_dim*len(multi_scale)
-            imnet_v['out_dim'] += imnet_dim*len(multi_scale)
+            imnet_q_spec['in_dim'] += imnet_dim*len(multi_scale)
+            imnet_k_spec['in_dim'] += imnet_dim*len(multi_scale)
+            imnet_v_spec['out_dim'] += imnet_dim*len(multi_scale)
 
         # imnet_q['in_dim'] *= 2
 
-        self.imnet_q = models.make(imnet_q) 
-        self.imnet_k = models.make(imnet_k) 
-        self.imnet_v = models.make(imnet_v) 
+        self.imnet_q = models.make(imnet_q_spec) 
+        self.imnet_k = models.make(imnet_k_spec) 
+        self.imnet_v = models.make(imnet_v_spec) 
         
         if self.non_local_attn:
-            self.cs_attn = NonLocalAttention(channel=imnet_dim, K=4, scale=multi_scale[0])    
+            self.cs_attn = models.make(nla_spec)    
             
 
     def forward(self, x, coord, cell, test_mode=False):
@@ -240,7 +241,7 @@ class LocalImplicitSRNet(nn.Module):
                 left = right
             pred = torch.cat(preds, dim=1)
         return pred
-
+@register("ciao")
 class LocalImplicitSREDSR(LocalImplicitSRNet):
     """LocalImplicitSR based on EDSR.
 
@@ -254,10 +255,11 @@ class LocalImplicitSREDSR(LocalImplicitSRNet):
     """
 
     def __init__(self,
-                 encoder,
-                 imnet_q,
-                 imnet_k,
-                 imnet_v,
+                 encoder_spec,
+                 imnet_q_spec,
+                 imnet_k_spec,
+                 imnet_v_spec,
+                 nla_spec,
                  query_mlp=None,
                  key_mlp=None,
                  value_mlp=None,
@@ -269,10 +271,11 @@ class LocalImplicitSREDSR(LocalImplicitSRNet):
                  softmax_scale=1,
                  ):
         super().__init__(
-            encoder=encoder,
-            imnet_q=imnet_q,
-            imnet_k=imnet_k,
-            imnet_v=imnet_v,
+            encoder=encoder_spec,
+            imnet_q=imnet_q_spec,
+            imnet_k=imnet_k_spec,
+            imnet_v=imnet_v_spec,
+            nla_spec=nla_spec,
             query_mlp=query_mlp,
             key_mlp=key_mlp,
             value_mlp=value_mlp,
@@ -283,7 +286,7 @@ class LocalImplicitSREDSR(LocalImplicitSRNet):
             multi_scale=multi_scale,
             softmax_scale=softmax_scale,
             )
-
+        self.encoder = models.make(self.encoder_spec)
         self.conv_first = self.encoder.conv_first
         self.body = self.encoder.body
         self.conv_after_body = self.encoder.conv_after_body

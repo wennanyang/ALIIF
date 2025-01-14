@@ -3,14 +3,10 @@ import math
 
 import torch
 import torch.nn as nn
-from mmcv.runner import load_checkpoint
-
 from mmedit.models.common import (PixelShufflePack, ResidualBlockNoBN,
                                   make_layer)
-from mmedit.models.registry import BACKBONES
-from mmedit.utils import get_root_logger
 
-
+from models import register
 class UpsampleModule(nn.Sequential):
     """Upsample module used in EDSR.
 
@@ -36,8 +32,7 @@ class UpsampleModule(nn.Sequential):
 
         super().__init__(*modules)
 
-
-@BACKBONES.register_module()
+@register("edsr_ciao")
 class EDSR(nn.Module):
     """EDSR network structure.
 
@@ -113,20 +108,3 @@ class EDSR(nn.Module):
 
         return x
 
-    def init_weights(self, pretrained=None, strict=True):
-        """Init weights for models.
-
-        Args:
-            pretrained (str, optional): Path for pretrained weights. If given
-                None, pretrained weights will not be loaded. Defaults to None.
-            strict (boo, optional): Whether strictly load the pretrained model.
-                Defaults to True.
-        """
-        if isinstance(pretrained, str):
-            logger = get_root_logger()
-            load_checkpoint(self, pretrained, strict=strict, logger=logger)
-        elif pretrained is None:
-            pass  # use default initialization
-        else:
-            raise TypeError('"pretrained" must be a str or None. '
-                            f'But received {type(pretrained)}.')

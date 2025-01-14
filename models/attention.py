@@ -22,7 +22,7 @@ def default_conv(in_channels, out_channels, kernel_size,stride=2, bias=True):
 
 @register("nla")
 class NonLocalAttention(nn.Module):
-    def __init__(self, in_dim=3, K=4, scale=4, dims=[6, 9]):
+    def __init__(self, in_dim=3, K=4, scale=4, dims=[32, 64]):
         super(NonLocalAttention, self).__init__()
         # kernel_size = 3, stride = 2, padding = 1, /2
         # kernel_size = 5, strid = 4, padding = 0, /4
@@ -55,6 +55,17 @@ class NonLocalAttention(nn.Module):
         self.proj_q1 = nn.Conv2d(in_dim, in_dim, 1, 1, 0, bias=False)
         self.proj_k1 = nn.Conv2d(in_dim, in_dim, 1, 1, 0, bias=False)
         # self.proj_v1 = nn.Conv2d(dims[1], dims[1], 1, 1, 0, bias=False)
+    def forward(self, x):
+        self.gen_feature(x)
+        self.non_local_attention()
+        # print(f"self.x1.shape = {self.x1.shape}")
+        # print(f"self.x2.shape = {self.x2.shape}")
+        # print(f"self.x3.shape = {self.x3.shape}")
+        B, C, H, W = x.shape
+        output = self.non_local_attention()
+        output = output.permute(0, 2, 1).reshape(B, C, H, W)
+        return x
+    
     def gen_feature(self, x):
         self.x1 = x
         self.x2 = self.block1(x)
@@ -143,6 +154,7 @@ class NonLocalAttention(nn.Module):
         d_k_3 = C3 ** 0.5
         attention_3 = attention_3 / d_k_3
         attention_3 = F.softmax(attention_3, dim=2)
+        print(f"attention_3.shape = {attention_3.shape}")
         # 取出前self.K个most similar的
         _, topK_indices_3 = torch.topk(attention_3, self.K, dim=2)
         '''
@@ -212,13 +224,3 @@ class NonLocalAttention(nn.Module):
         indices_3[:, :, :, 1] = torch.remainder(indices_3[:, :, :, 1], H // self.scale // self.scale)
         return attention_weights, indices, indices_3
 
-    def forward(self, x):
-        self.gen_feature(x)
-        self.non_local_attention()
-        # print(f"self.x1.shape = {self.x1.shape}")
-        # print(f"self.x2.shape = {self.x2.shape}")
-        # print(f"self.x3.shape = {self.x3.shape}")
-        B, C, H, W = x.shape
-        output = self.non_local_attention()
-        output = output.permute(0, 2, 1).reshape(B, C, H, W)
-        return x

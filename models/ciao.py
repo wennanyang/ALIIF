@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from utils import make_coord
-from attention import NonLocalAttention
 import models
 from models import register
 class LocalImplicitSRNet(nn.Module):
@@ -49,24 +48,22 @@ class LocalImplicitSRNet(nn.Module):
         # 输入通道
         imnet_dim = self.encoder.mid_channels
         if self.feat_unfold:
-            imnet_q_spec['in_dim'] = imnet_dim * 9
-            imnet_k_spec['in_dim'] = imnet_k_spec['out_dim'] = imnet_dim * 9
-            imnet_v_spec['in_dim'] = imnet_v_spec['out_dim'] = imnet_dim * 9
+            imnet_q_spec['args']['in_dim'] = imnet_dim * 9
+            imnet_k_spec['args']['in_dim'] = imnet_k_spec['args']['out_dim'] = imnet_dim * 9
+            imnet_v_spec['args']['in_dim'] = imnet_v_spec['args']['out_dim'] = imnet_dim * 9
         else:
-            imnet_q_spec['in_dim'] = imnet_dim
-            imnet_k_spec['in_dim'] = imnet_k_spec['out_dim'] = imnet_dim
-            imnet_v_spec['in_dim'] = imnet_v_spec['out_dim'] = imnet_dim
+            imnet_q_spec['args']['in_dim'] = imnet_dim
+            imnet_k_spec['args']['in_dim'] = imnet_k_spec['args']['out_dim'] = imnet_dim
+            imnet_v_spec['args']['in_dim'] = imnet_v_spec['args']['out_dim'] = imnet_dim
         # coord and cell
-        imnet_k_spec['in_dim'] += 4
-        imnet_v_spec['in_dim'] += 4
+        imnet_k_spec['args']['in_dim'] += 4
+        imnet_v_spec['args']['in_dim'] += 4
         # 这里是多尺度的个数，为1
         if self.non_local_attn:
-            imnet_q_spec['in_dim'] += imnet_dim*len(multi_scale)
-            imnet_k_spec['in_dim'] += imnet_dim*len(multi_scale)
-            imnet_v_spec['out_dim'] += imnet_dim*len(multi_scale)
-
+            imnet_q_spec['args']['in_dim'] += 3*len(multi_scale)
+            imnet_v_spec['args']['in_dim'] += 3*len(multi_scale)
+            imnet_v_spec['args']['out_dim'] += 3*len(multi_scale)
         # imnet_q['in_dim'] *= 2
-
         self.imnet_q = models.make(imnet_q_spec) 
         self.imnet_k = models.make(imnet_k_spec) 
         self.imnet_v = models.make(imnet_v_spec) 
@@ -90,9 +87,9 @@ class LocalImplicitSRNet(nn.Module):
         feature = self.gen_feature(x)
 
         if self.eval_bsize is None or not test_mode:
-            pred = self.query_rgb(feature, coord, cell)
+            pred = self.query_rgb(feature, x, coord, cell)
         else:
-            pred = self.batched_predict(feature, coord, cell)
+            pred = self.batched_predict(feature, x, coord, cell)
 
         pred += F.grid_sample(x, coord.flip(-1).unsqueeze(1), mode='bilinear',\
                     padding_mode='border', align_corners=False)[:, :, 0, :].permute(0, 2, 1)
@@ -100,7 +97,7 @@ class LocalImplicitSRNet(nn.Module):
         return pred
 
 
-    def query_rgb(self, features, coord, scale=None):
+    def query_rgb(self, features, x, coord, scale=None):
         """Query RGB value of GT.
 
         Copyright (c) 2020, Yinbo Chen, under BSD 3-Clause License.
@@ -114,7 +111,6 @@ class LocalImplicitSRNet(nn.Module):
         """
 
         res_features = []
-        # print(f"len(features)={len(features)}")
         for feature in features:
             
             B, C, H, W = feature.shape      #[16, 64, 48, 48]
@@ -123,7 +119,7 @@ class LocalImplicitSRNet(nn.Module):
                 feat_q = F.unfold(feature, 3, padding=1).view(B, C*9, H, W)         #[16, 576, 48, 48]
                 feat_k = F.unfold(feature, 3, padding=1).view(B, C*9, H, W)         #[16, 576, 48, 48]
                 if self.non_local_attn:
-                    non_local_feat_v = self.cs_attn(feature)                        #[16, 64, 48, 48]
+                    non_local_feat_v = self.cs_attn(x)                        #[16, 64, 48, 48]
                     feat_v = F.unfold(feature, 3, padding=1).view(B, C*9, H, W)     #[16, 576, 48, 48]
                     feat_v = torch.cat([feat_v, non_local_feat_v], dim=1)           #[16, 576+64, 48, 48]
                 else:
@@ -167,9 +163,9 @@ class LocalImplicitSRNet(nn.Module):
 
                 # key and value
                 key = F.grid_sample(feat_k, coord_.flip(-1).unsqueeze(1), mode='nearest', 
-                    align_corners=False)[:, :, 0, :].permute(0, 2, 1).contiguous()          #[16, 2304, 576]
+                    align_corners=False)[:, :, 0, :].permute(0, 2, 1).contiguous()          #[16, 2304, 64*9]
                 value = F.grid_sample(feat_v, coord_.flip(-1).unsqueeze(1), mode='nearest', 
-                    align_corners=False)[:, :, 0, :].permute(0, 2, 1).contiguous()          #[16, 2304, 576]
+                    align_corners=False)[:, :, 0, :].permute(0, 2, 1).contiguous()          #[16, 2304, 64*9+3]
 
                 #Interpolate K to HR resolution
                 coord_k = F.grid_sample(feat_coord, coord_.flip(-1).unsqueeze(1),
@@ -185,14 +181,14 @@ class LocalImplicitSRNet(nn.Module):
                 scale_[:, :, 0] *= feature.shape[-2]
                 scale_[:, :, 1] *= feature.shape[-1]
 
-                inp_v = torch.cat([value, inp, scale_], dim=-1)   #[16, 2304, 580]
-                inp_k = torch.cat([key, inp, scale_], dim=-1)     #[16, 2304, 580]
+                inp_v = torch.cat([value, inp, scale_], dim=-1)   #[16, 2304, 64*9+3+4]
+                inp_k = torch.cat([key, inp, scale_], dim=-1)     #[16, 2304, 64*9+4]
                     
 
                 inp_k = inp_k.contiguous().view(bs * q, -1)
                 inp_v = inp_v.contiguous().view(bs * q, -1)
-
                 weight_k = self.imnet_k(inp_k).view(bs, q, -1).contiguous()   #[16, 2304, 576]
+                # print(f"key.shape = {key.shape}, weight_k.shape = {weight_k.shape}")
                 pred_k = (key * weight_k).view(bs, q, -1)                     #[16, 2304, 576]
                 
                 weight_v = self.imnet_v(inp_v).view(bs, q, -1).contiguous()   #[16, 2304, 576]
@@ -211,7 +207,6 @@ class LocalImplicitSRNet(nn.Module):
             res_features.append(x) 
 
         result = torch.cat(res_features, dim=-1)    # [36864, 640]
-        # print(f"result.shape = {result.shape}")
         result = self.imnet_q(result)               # [36864, 3]
         # print(f"result.shape2 = {result.shape}")
         result = result.view(bs, q, -1)
@@ -271,10 +266,10 @@ class LocalImplicitSREDSR(LocalImplicitSRNet):
                  softmax_scale=1,
                  ):
         super().__init__(
-            encoder=encoder_spec,
-            imnet_q=imnet_q_spec,
-            imnet_k=imnet_k_spec,
-            imnet_v=imnet_v_spec,
+            encoder_spec=encoder_spec,
+            imnet_q_spec=imnet_q_spec,
+            imnet_k_spec=imnet_k_spec,
+            imnet_v_spec=imnet_v_spec,
             nla_spec=nla_spec,
             query_mlp=query_mlp,
             key_mlp=key_mlp,
@@ -286,7 +281,7 @@ class LocalImplicitSREDSR(LocalImplicitSRNet):
             multi_scale=multi_scale,
             softmax_scale=softmax_scale,
             )
-        self.encoder = models.make(self.encoder_spec)
+        self.encoder = models.make(encoder_spec)
         self.conv_first = self.encoder.conv_first
         self.body = self.encoder.body
         self.conv_after_body = self.encoder.conv_after_body

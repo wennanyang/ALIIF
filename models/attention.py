@@ -58,9 +58,6 @@ class NonLocalAttention(nn.Module):
     def forward(self, x):
         self.gen_feature(x)
         self.non_local_attention()
-        # print(f"self.x1.shape = {self.x1.shape}")
-        # print(f"self.x2.shape = {self.x2.shape}")
-        # print(f"self.x3.shape = {self.x3.shape}")
         B, C, H, W = x.shape
         output = self.non_local_attention()
         output = output.permute(0, 2, 1).reshape(B, C, H, W)
@@ -154,7 +151,6 @@ class NonLocalAttention(nn.Module):
         d_k_3 = C3 ** 0.5
         attention_3 = attention_3 / d_k_3
         attention_3 = F.softmax(attention_3, dim=2)
-        print(f"attention_3.shape = {attention_3.shape}")
         # 取出前self.K个most similar的
         _, topK_indices_3 = torch.topk(attention_3, self.K, dim=2)
         '''

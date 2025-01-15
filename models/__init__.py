@@ -4,3 +4,6 @@ from . import mlp
 from . import liif
 from . import misc
 from . import attention
+from . import ciao
+from . import edsr_ciaosr
+from . import mlp_refiner

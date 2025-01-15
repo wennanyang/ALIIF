@@ -1,7 +1,8 @@
 from models.attention import NonLocalAttention
 import torch 
-
-
+import yaml
+import models
+from utils import make_coord
 torch.manual_seed(42)
 # yes!! 证明是正确的！！！
 def dot_multiply():
@@ -23,14 +24,27 @@ def dot_multiply():
     print(f"first v data = {scores[0, 0, :]}")
     print(scores.shape)
 def main():
-    device = "cuda:0"
-    batch = torch.ones((16, 3, 128, 128), device=device, dtype=torch.float)
-    model = NonLocalAttention()
-    model.to(device=device)
-    model(batch)
+    # device = "cuda:0"
+    # batch = torch.ones((16, 3, 128, 128), device=device, dtype=torch.float)
+    # model = NonLocalAttention()
+    # model.to(device=device)
+    # model(batch)
     # tensor = torch.tensor([[1, 2], [3, 4]])
     # tensor = tensor.repeat(1, 2)
     # print(tensor)
+    config_path = "/home/ywn/graduate/ALIIF/configs/aliif.yaml"
+    with open(config_path, 'r') as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+    model = models.make(config['model']).cuda()
+    x = torch.rand((2, 3, 128, 128), dtype=torch.float).cuda()
+    coord = make_coord(x.shape[-2:]).unsqueeze(0).repeat(2, 1, 1).cuda()
+    print(f"coord.shape = {coord.shape}")
+    cell = torch.ones_like(coord).cuda()
+    cell[:, :, 0] *= 2 / x.shape[-2]
+    cell[:, :, 1] *= 2 / x.shape[-1]
+    print(cell.shape)
+    pred = model(x, coord, cell)
+    print(pred.shape)
 
 if __name__ == '__main__':
     main()

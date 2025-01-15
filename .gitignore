@@ -1,6 +1,7 @@
 save/
 archive_models/
 map/
+load/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

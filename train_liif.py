@@ -211,7 +211,7 @@ if __name__ == '__main__':
     parser.add_argument('--config', default="./configs/aliif.yaml")
     parser.add_argument('--name', default=None)
     parser.add_argument('--tag', default=None)
-    parser.add_argument('--gpu', default='0, 1, 2')
+    parser.add_argument('--gpu', default='0, 1')
     args = parser.parse_args()
 
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu

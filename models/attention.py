@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from models import register
+import time
 class BasicBlock(nn.Sequential):
     def __init__(
         self, conv, in_channels, out_channels, kernel_size, stride=2, bias=True,
@@ -138,6 +139,7 @@ class NonLocalAttention(nn.Module):
         attention_weights = F.softmax(attention_scores, dim=2)
         return attention_weights
     def non_local_attention(self):
+        start_time_1 = time.time()
         '''
         第一阶段 在最小的形状上
         '''
@@ -152,10 +154,13 @@ class NonLocalAttention(nn.Module):
         attention_3 = F.softmax(attention_3, dim=2)
         # 取出前self.K个most similar的
         _, topK_indices_3 = torch.topk(attention_3, self.K, dim=2)
+        time_diff_1 = time.time() - start_time_1
+        print(f"1 stage elapse = {int((time_diff_1 % 3600) // 60):02}.{int((time_diff_1 % 1) * 1000):02}")
         '''
         第二阶段
         '''
         # 将indices扩展
+        start_time_2 = time.time()
         topK_indices_3_expand = self.expand_indices(topK_indices_3, self.scale, (H3, W3))
         # 利用indices采样
         attention2 = self.attention(self.x2, topK_indices_3_expand, 2)
@@ -163,9 +168,12 @@ class NonLocalAttention(nn.Module):
         # temp_indices_2 = [B, H2*W2, K]
         # 从topK_indices_3_expand中选择K个索引，得到在第二阶段的实际索引值
         topK_indices_2 = torch.gather(topK_indices_3_expand, dim=2, index=temp_indices_2)
+        time_diff_2 = time.time() - start_time_2
+        print(f"2 stage elapse = {int((time_diff_2 % 3600) // 60):02}.{int((time_diff_2 % 1) * 1000):02}")
         '''
         # 第三阶段
         # '''
+        start_time_3 = time.time()
         topK_indices_2_expand = self.expand_indices(topK_indices_2, self.scale, 
                                             (self.x2.shape[-2], self.x2.shape[-1]))
         attention1 = self.attention(self.x1, topK_indices_2_expand, 1)
@@ -174,9 +182,12 @@ class NonLocalAttention(nn.Module):
         _, temp_indices_1 = torch.topk(attention1, self.K, dim=2)
         # 这里才是实际的索引值
         topK_indices_1 = torch.gather(topK_indices_2_expand, dim=2, index=temp_indices_1)
+        time_diff_3 = time.time() -start_time_3
+        print(f"3 stage elapse = {int((time_diff_3 % 3600) // 60):02}.{int((time_diff_3 % 1) * 1000):02}")
         '''
         最后输出阶段
         '''
+        start_time_output = time.time()
         B1, C1, H1, W1 = self.x1.shape
         Q = self.q
         # 重复匹配通道
@@ -200,6 +211,8 @@ class NonLocalAttention(nn.Module):
         self.indices = topK_indices_1
         self.indices_3 = topK_indices_3
         # 返回
+        time_diff_output = time.time() - start_time_output
+        print(f"output stage elapse = {int((time_diff_output % 3600) // 60):02}.{int((time_diff_output % 1) * 1000):02}")
         return output
     def get_attention_map(self, x):
         self.gen_feature(x)

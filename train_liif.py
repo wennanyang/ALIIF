@@ -35,7 +35,7 @@ import datasets
 import models
 import utils
 from test import eval_psnr
-
+import time
 
 def make_data_loader(spec, tag=''):
     if spec is None:
@@ -104,8 +104,10 @@ def train(train_loader, model, optimizer):
             batch[k] = v.cuda()
 
         inp = (batch['inp'] - inp_sub) / inp_div
+        start_time = time.time()
         pred = model(inp, batch['coord'], batch['cell'])
-
+        time_diff = time.time() - start_time
+        print(f"batch elapse = {int((time_diff % 3600) // 60):02}.{int((time_diff % 1) * 1000):02}")
         gt = (batch['gt'] - gt_sub) / gt_div
         loss = loss_fn(pred, gt)
 
@@ -152,7 +154,6 @@ def main(config_, save_path):
         log_info = ['epoch {}/{}'.format(epoch, epoch_max)]
 
         writer.add_scalar('lr', optimizer.param_groups[0]['lr'], epoch)
-
         train_loss = train(train_loader, model, optimizer)
         if lr_scheduler is not None:
             lr_scheduler.step()

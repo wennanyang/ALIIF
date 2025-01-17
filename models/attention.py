@@ -56,10 +56,16 @@ class NonLocalAttention(nn.Module):
         self.proj_k1 = nn.Conv2d(in_dim, in_dim, 1, 1, 0, bias=False)
         # self.proj_v1 = nn.Conv2d(dims[1], dims[1], 1, 1, 0, bias=False)
     def forward(self, x):
+        gen_feature_time = time.time()
         self.gen_feature(x)
-        self.non_local_attention()
+        time_diff_gen_feature = time.time() - gen_feature_time
+        # print(f"gen feature stage elapse = {int((time_diff_gen_feature % 60)):02}.{int((time_diff_gen_feature % 1) * 100):02}")
+        nla_time = time.time()
+        
         B, C, H, W = x.shape
         output = self.non_local_attention()
+        time_diff_nla = time.time() - nla_time
+        # print(f"nla stage elapse = {int((time_diff_nla % 60)):02}.{int((time_diff_nla % 1) * 100):02}")
         output = output.permute(0, 2, 1).reshape(B, C, H, W)
         return x
     
@@ -138,7 +144,7 @@ class NonLocalAttention(nn.Module):
         attention_scores = attention_scores / (d_k ** 0.5)
         attention_weights = F.softmax(attention_scores, dim=2)
         return attention_weights
-    def non_local_attention(self):
+    def non_local_attention_show_time(self):
         start_time_1 = time.time()
         '''
         第一阶段 在最小的形状上
@@ -155,35 +161,45 @@ class NonLocalAttention(nn.Module):
         # 取出前self.K个most similar的
         _, topK_indices_3 = torch.topk(attention_3, self.K, dim=2)
         time_diff_1 = time.time() - start_time_1
-        print(f"1 stage elapse = {int((time_diff_1 % 3600) // 60):02}.{int((time_diff_1 % 1) * 1000):02}")
+        print(f"1 stage elapse = {int((time_diff_1 % 60)):02}.{int((time_diff_1 % 1) * 100):02}")
         '''
         第二阶段
         '''
         # 将indices扩展
         start_time_2 = time.time()
         topK_indices_3_expand = self.expand_indices(topK_indices_3, self.scale, (H3, W3))
+        time_diff_expand_2 = time.time() - start_time_2
+        print(f"2 stage expand elapse = {int((time_diff_expand_2 % 60)):02}.{int((time_diff_expand_2 % 1) * 100):02}")
         # 利用indices采样
+        attention_time_2 = time.time()
         attention2 = self.attention(self.x2, topK_indices_3_expand, 2)
+        time_diff_attention_2 = time.time() - attention_time_2
+        print(f"2 stage attention elapse = {int((time_diff_attention_2 % 60)):02}.{int((time_diff_attention_2 % 1) * 100):02}")
         _, temp_indices_2 = torch.topk(attention2, self.K, dim=2)
         # temp_indices_2 = [B, H2*W2, K]
         # 从topK_indices_3_expand中选择K个索引，得到在第二阶段的实际索引值
         topK_indices_2 = torch.gather(topK_indices_3_expand, dim=2, index=temp_indices_2)
         time_diff_2 = time.time() - start_time_2
-        print(f"2 stage elapse = {int((time_diff_2 % 3600) // 60):02}.{int((time_diff_2 % 1) * 1000):02}")
+        print(f"2 stage elapse = {int((time_diff_2 % 60)):02}.{int((time_diff_2 % 1) * 100):02}")
         '''
         # 第三阶段
         # '''
         start_time_3 = time.time()
         topK_indices_2_expand = self.expand_indices(topK_indices_2, self.scale, 
                                             (self.x2.shape[-2], self.x2.shape[-1]))
+        timd_diff_expand_1 = time.time() - start_time_3
+        print(f"3 stage expand elapse = {int((timd_diff_expand_1 % 60)):02}.{int((timd_diff_expand_1 % 1) * 100):02}")
+        attention_time_1 = time.time()
         attention1 = self.attention(self.x1, topK_indices_2_expand, 1)
+        time_diff_attention_1 = time.time() - attention_time_1
+        print(f"3 stage attention elapse = {int((time_diff_attention_1 % 60)):02}.{int((time_diff_attention_1 % 1) * 100):02}")
 
         # 在K*scale*scale中得到前K个most similar
         _, temp_indices_1 = torch.topk(attention1, self.K, dim=2)
         # 这里才是实际的索引值
         topK_indices_1 = torch.gather(topK_indices_2_expand, dim=2, index=temp_indices_1)
-        time_diff_3 = time.time() -start_time_3
-        print(f"3 stage elapse = {int((time_diff_3 % 3600) // 60):02}.{int((time_diff_3 % 1) * 1000):02}")
+        time_diff_3 = time.time() - start_time_3
+        print(f"3 stage elapse = {int((time_diff_3 % 60)):02}.{int((time_diff_3 % 1) * 100):02}")
         '''
         最后输出阶段
         '''
@@ -193,9 +209,82 @@ class NonLocalAttention(nn.Module):
         # 重复匹配通道
         topK_indices_1_expand = topK_indices_1.clone().unsqueeze(1).expand(-1, C1, -1, -1)
         K_ = [None] * (H1 * W1)
+        get_index_time = time.time()
         for i in range(H1 * W1):
             K_[i] = torch.gather(self.k, dim=2, index=topK_indices_1_expand[:, :, i, :])
+        time_diff_index = time.time() - get_index_time
+        print(f"output stage get index elapse = {int((time_diff_index % 60)):02}.{int((time_diff_index % 1) * 100):02}")
+
+        K = torch.stack(K_, dim=2)
+        V = K
+        Q = Q.permute(0, 2, 1) # [B, N, C]
+        K = K.permute(0, 2, 3, 1) # [B, N, K, C]
+        V = V.permute(0, 2, 3, 1) # [B, N, k, C]
+        output_attention = time.time()
+        attention_scores = torch.einsum('bnc,bnkc->bnk', Q, K)
+        d_k = C1
+        attention_scores = attention_scores / (d_k ** 0.5)
+        attention_weights = F.softmax(attention_scores, dim=2) # [B, N, K]
+        output = torch.einsum('bnk,bnkc->bnc', attention_weights, V) # [B, N, C]
+        time_diff_output_attention = time.time() - output_attention
+        print(f"output attention stage elapse = {int((time_diff_output_attention % 60)):02}.{int((time_diff_output_attention % 1) * 100):02}")
         
+        # 用于attention map的数据
+        self.attention_weights = attention_3
+        self.indices = topK_indices_1
+        self.indices_3 = topK_indices_3
+        # 返回
+        time_diff_output = time.time() - start_time_output
+        print(f"output stage elapse = {int((time_diff_output % 60)):02}.{int((time_diff_output % 1) * 100):02}")
+        return output
+    def non_local_attention(self):
+        '''
+        第一阶段 在最小的形状上
+        '''
+        x = self.x3
+        B3, C3, H3, W3 = x.shape
+        q = self.proj_q3(x).reshape(B3, C3, H3*W3)
+        k = self.proj_k3(x).reshape(B3, C3, H3*W3)
+        # v = self.proj_v3(x).reshape(B, C, H*W)
+        attention_3 = torch.einsum('b c m, b c n -> b m n', q, k)
+        d_k_3 = C3 ** 0.5
+        attention_3 = attention_3 / d_k_3
+        attention_3 = F.softmax(attention_3, dim=2)
+        # 取出前self.K个most similar的
+        _, topK_indices_3 = torch.topk(attention_3, self.K, dim=2)
+        '''
+        第二阶段
+        '''
+        # 将indices扩展
+        topK_indices_3_expand = self.expand_indices(topK_indices_3, self.scale, (H3, W3))
+        # 利用indices采样
+        attention2 = self.attention(self.x2, topK_indices_3_expand, 2)
+        _, temp_indices_2 = torch.topk(attention2, self.K, dim=2)
+        # temp_indices_2 = [B, H2*W2, K]
+        # 从topK_indices_3_expand中选择K个索引，得到在第二阶段的实际索引值
+        topK_indices_2 = torch.gather(topK_indices_3_expand, dim=2, index=temp_indices_2)
+        '''
+        # 第三阶段
+        # '''
+        topK_indices_2_expand = self.expand_indices(topK_indices_2, self.scale, 
+                                            (self.x2.shape[-2], self.x2.shape[-1]))
+        attention1 = self.attention(self.x1, topK_indices_2_expand, 1)
+
+        # 在K*scale*scale中得到前K个most similar
+        _, temp_indices_1 = torch.topk(attention1, self.K, dim=2)
+        # 这里才是实际的索引值
+        topK_indices_1 = torch.gather(topK_indices_2_expand, dim=2, index=temp_indices_1)
+        '''
+        最后输出阶段
+        '''
+        B1, C1, H1, W1 = self.x1.shape
+        Q = self.q
+        # 重复匹配通道
+        topK_indices_1_expand = topK_indices_1.clone().unsqueeze(1).expand(-1, C1, -1, -1)
+        K_ = [None] * (H1 * W1)
+        for i in range(H1 * W1):
+            K_[i] = torch.gather(self.k, dim=2, index=topK_indices_1_expand[:, :, i, :])
+
         K = torch.stack(K_, dim=2)
         V = K
         Q = Q.permute(0, 2, 1) # [B, N, C]
@@ -206,14 +295,14 @@ class NonLocalAttention(nn.Module):
         attention_scores = attention_scores / (d_k ** 0.5)
         attention_weights = F.softmax(attention_scores, dim=2) # [B, N, K]
         output = torch.einsum('bnk,bnkc->bnc', attention_weights, V) # [B, N, C]
+        
         # 用于attention map的数据
         self.attention_weights = attention_3
         self.indices = topK_indices_1
         self.indices_3 = topK_indices_3
         # 返回
-        time_diff_output = time.time() - start_time_output
-        print(f"output stage elapse = {int((time_diff_output % 3600) // 60):02}.{int((time_diff_output % 1) * 1000):02}")
         return output
+    
     def get_attention_map(self, x):
         self.gen_feature(x)
         self.non_local_attention()

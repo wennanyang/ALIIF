@@ -123,7 +123,7 @@ class LocalImplicitSRNet(nn.Module):
                     start_time = time.time()
                     non_local_feat_v = self.cs_attn(x)                        #[16, 64, 48, 48]
                     time_diff = time.time() - start_time
-                    print(f"nla elapse = {int((time_diff % 3600) // 60):02}.{int((time_diff % 1) * 1000):02}")
+                    # print(f"nla elapse = {int((time_diff % 60)):02}.{int((time_diff % 1) * 100):02}")
                     feat_v = F.unfold(feature, 3, padding=1).view(B, C*9, H, W)     #[16, 576, 48, 48]
                     feat_v = torch.cat([feat_v, non_local_feat_v], dim=1)           #[16, 576+64, 48, 48]
                 else:

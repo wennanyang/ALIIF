@@ -107,7 +107,7 @@ def train(train_loader, model, optimizer):
         start_time = time.time()
         pred = model(inp, batch['coord'], batch['cell'])
         time_diff = time.time() - start_time
-        print(f"batch elapse = {int((time_diff % 3600) // 60):02}.{int((time_diff % 1) * 1000):02}")
+        # print(f"batch elapse = {int((time_diff % 60)):02}.{int((time_diff % 1) * 100):02}")
         gt = (batch['gt'] - gt_sub) / gt_div
         loss = loss_fn(pred, gt)
 

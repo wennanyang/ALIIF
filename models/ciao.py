@@ -217,7 +217,7 @@ class LocalImplicitSRNet(nn.Module):
 
         return result
 
-    def batched_predict(self, x, coord, cell):
+    def batched_predict(self, feature, x, coord, cell, bsize=30000):
         """Batched predict.
 
         Args:
@@ -233,8 +233,8 @@ class LocalImplicitSRNet(nn.Module):
             left = 0
             preds = []
             while left < n:
-                right = min(left + self.eval_bsize, n)
-                pred = self.query_rgb(x, coord[:, left:right, :],
+                right = min(left + bsize, n)
+                pred = self.query_rgb(feature, x, coord[:, left:right, :],
                                       cell[:, left:right, :])
                 preds.append(pred)
                 left = right

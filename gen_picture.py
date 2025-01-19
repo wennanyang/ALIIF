@@ -24,6 +24,7 @@ def gen_picture(model_path, input, output, scale):
     # 转换为张量 [C, H, W]
     img = transforms.ToTensor()(Image.open(input).convert('RGB'))
     model = models.make(torch.load(model_path)['model'], load_sd=True).cuda()
+    
     # 切片
     # ih, iw = 240, 240
     # start, end = 400, 500
@@ -37,8 +38,9 @@ def gen_picture(model_path, input, output, scale):
     cell = torch.ones_like(coord)
     cell[:, 0] *= 2 / h
     cell[:, 1] *= 2 / w
-    pred = batched_predict(model, ((img - 0.5) / 0.5).cuda().unsqueeze(0),
-        coord.unsqueeze(0), cell.unsqueeze(0), bsize=30000)[0]
+    feature = model.gen_feature(((img - 0.5) / 0.5).cuda().unsqueeze(0))
+    pred = model.batched_predict(feature, ((img - 0.5) / 0.5).cuda().unsqueeze(0),
+        coord.unsqueeze(0), cell.unsqueeze(0), bsize=30)[0]
     pred = (pred * 0.5 + 0.5).clamp(0, 1).view(h, w, 3).permute(2, 0, 1).cpu()
     transforms.ToPILImage()(pred).save(output)
 
@@ -91,7 +93,7 @@ def get_liif_pic(path, shape, output=Path('liif_pic.png')):
 def main():
     if not ROOT.exists():
         os.mkdir(ROOT)
-    path = Path("/home/ywn/graduate/DATASET/benchmark/Urban100/HR/img004.png")
+    path = Path("/home/ysy/ywn/ALIIF/origin.png")
 
     parent_path = ROOT.joinpath(str(path.name).split('.')[0])
 
@@ -100,10 +102,12 @@ def main():
 
     get_liif_pic(path, (128, 128), parent_path.joinpath('liif_pic.png'))
     input_img = parent_path.joinpath('liif_pic.png')
-    # gen_picture("/home/ywn/graduate/liif/save/_ywn/epoch-700.pth", input_img, parent_path.joinpath("attention.png"), 8)
-    gen_picture('/home/ywn/refsr/LIIF/save/div2k_1014/epoch-best.pth', input_img, parent_path.joinpath("liif-best.png"), 8)
-    gen_picture('/home/ywn/refsr/LIIF/save/div2k_1014/epoch-100.pth', input_img, parent_path.joinpath("liif-200.png"), 8)
     gen_picture_bicubic_opencv(input_img, 8, parent_path.joinpath('bicubic_opencv.png'))
+    lq_img = parent_path.joinpath('bicubic_opencv.png')
+    gen_picture("/home/ysy/ywn/ALIIF/archive_models/train_0109/epoch-best.pth", lq_img, parent_path.joinpath("attention.png"), 8)
+    # gen_picture('/home/ywn/refsr/LIIF/save/div2k_1014/epoch-best.pth', input_img, parent_path.joinpath("liif-best.png"), 8)
+    # gen_picture('/home/ywn/refsr/LIIF/save/div2k_1014/epoch-100.pth', input_img, parent_path.joinpath("liif-200.png"), 8)
+    
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

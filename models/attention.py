@@ -281,6 +281,7 @@ class NonLocalAttention(nn.Module):
         Q = self.q
         # 重复匹配通道
         topK_indices_1_expand = topK_indices_1.clone().unsqueeze(1).expand(-1, C1, -1, -1)
+        print(f"H1 * W1 = {H1 * W1}")
         K_ = [None] * (H1 * W1)
         for i in range(H1 * W1):
             K_[i] = torch.gather(self.k, dim=2, index=topK_indices_1_expand[:, :, i, :])

@@ -92,8 +92,8 @@ def eval_psnr(loader, model, data_norm=None, eval_type=None, eval_bsize=None,
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config')
-    parser.add_argument('--model')
+    parser.add_argument('--config', default='/home/ywn/graduate/ALIIF/configs/aliif_test.yaml')
+    parser.add_argument('--model', default='/home/ywn/refsr/LIIF/save/div2k_1014/epoch-300.pth')
     parser.add_argument('--gpu', default='0')
     args = parser.parse_args()
 
@@ -101,7 +101,6 @@ if __name__ == '__main__':
 
     with open(args.config, 'r') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
-
     spec = config['test_dataset']
     dataset = datasets.make(spec['dataset'])
     dataset = datasets.make(spec['wrapper'], args={'dataset': dataset})

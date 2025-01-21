@@ -82,8 +82,8 @@ def eval_psnr(loader, model, data_norm=None, eval_type=None, eval_bsize=None,
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config')
-    parser.add_argument('--model', default='./archive_models/aliif/epoch-150.pth')
+    parser.add_argument('--config', default='./configs/aliif_test.yaml')
+    parser.add_argument('--model', default='./archive_models/aliif/epoch-best-250.pth')
     parser.add_argument('--gpu', default='0')
     args = parser.parse_args()
 

@@ -12,15 +12,14 @@ from test import batched_predict
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input', default='liif_pic.png')
-    parser.add_argument('--model', default='./archive_models/aliif/epoch-150.pth')
-    parser.add_argument('--resolution', default='256, 256')
-    parser.add_argument('--output', default='output.png')
+    parser.add_argument('--input', default='/home/ywn/graduate/ALIIF/lq_img.png')
+    parser.add_argument('--model', default='/home/ywn/graduate/ALIIF/archive_models/aliif/epoch-best-250.pth')
+    parser.add_argument('--resolution', default='192, 192')
+    parser.add_argument('--output', default='aliif.png')
     parser.add_argument('--gpu', default='0')
     args = parser.parse_args()
 
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-
     img = transforms.ToTensor()(Image.open(args.input).convert('RGB'))
 
     model = models.make(torch.load(args.model)['model'], load_sd=True).cuda()
@@ -31,6 +30,6 @@ if __name__ == '__main__':
     cell[:, 0] *= 2 / h
     cell[:, 1] *= 2 / w
     pred = model(((img - 0.5) / 0.5).cuda().unsqueeze(0),
-        coord.unsqueeze(0), cell.unsqueeze(0), True)[0]
+        coord.unsqueeze(0), cell.unsqueeze(0))[0]
     pred = (pred * 0.5 + 0.5).clamp(0, 1).view(h, w, 3).permute(2, 0, 1).cpu()
     transforms.ToPILImage()(pred).save(args.output)

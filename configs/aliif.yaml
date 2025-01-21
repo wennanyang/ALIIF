@@ -1,3 +1,4 @@
+resume: ./archive_models/train_0117/epoch-last.pth
 train_dataset:
   dataset:
     name: image-folder
@@ -13,7 +14,6 @@ train_dataset:
       augment: true
       sample_q: 2304
   batch_size: 16
-
 val_dataset:
   dataset:
     name: image-folder
@@ -32,7 +32,6 @@ val_dataset:
 data_norm:
   inp: {sub: [0.5], div: [0.5]}
   gt: {sub: [0.5], div: [0.5]}
-
 model:
   name: ciao
   args:

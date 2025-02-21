@@ -33,9 +33,7 @@ data_norm:
   gt: {sub: [0.5], div: [0.5]}
 
 model:
-  name: liif
-  args:
-  name: ciao
+  name: ciao_pm
   args:
     encoder_spec:
       name: edsr_ciao

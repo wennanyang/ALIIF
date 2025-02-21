@@ -8,7 +8,8 @@ from models import register
 class PatchMatch(nn.Module):
     def __init__(self, x=1):
         super(PatchMatch, self).__init__()
-
+        self.all_weights = None
+        self.top_3_index = None
     def bis(self, input, dim, index):
         # batch index select
         # input: [N, ?, ?, ...]
@@ -24,6 +25,7 @@ class PatchMatch(nn.Module):
     def forward(self, x):
         # x = [B, C, H, W]
         B, C, H, W = x.shape
+        # x_unfold = [B, C*9, H*W]
         x_unfold  = F.unfold(x, kernel_size=(3, 3), padding=1)
         x_unfold = F.normalize(x_unfold, dim=2)
         R = torch.bmm(x_unfold.permute(0, 2, 1), x_unfold)
@@ -41,3 +43,12 @@ class PatchMatch(nn.Module):
         attention_weights = F.softmax(attention_scores, dim=2)
         output = torch.einsum('bnk,bnkc->bnc', attention_weights, V)
         return output.reshape(B, H, W, C).permute(0, 3, 1, 2)
+    
+    @torch.no_grad()
+    def get_attention_map(self, x):
+        B, C, H, W = x.shape
+        x_unfold  = F.unfold(x, kernel_size=(3, 3), padding=1)
+        x_unfold = F.normalize(x_unfold, dim=2)
+        R = torch.bmm(x_unfold.permute(0, 2, 1), x_unfold)
+        _, indices = torch.topk(R, k=3, dim=2)
+        return R, indices

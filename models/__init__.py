@@ -7,3 +7,5 @@ from . import attention
 from . import ciao
 from . import edsr_ciaosr
 from . import mlp_refiner
+from . import cross_scale_attention
+from . import patch_match

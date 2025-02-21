@@ -2,10 +2,11 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from models import register
 
-
+@register('pm')
 class PatchMatch(nn.Module):
-    def __init__(self):
+    def __init__(self, x=1):
         super(PatchMatch, self).__init__()
 
     def bis(self, input, dim, index):
@@ -24,7 +25,6 @@ class PatchMatch(nn.Module):
         # x = [B, C, H, W]
         B, C, H, W = x.shape
         x_unfold  = F.unfold(x, kernel_size=(3, 3), padding=1)
-        print(f"x_unfold.shape = {x_unfold.shape}")
         x_unfold = F.normalize(x_unfold, dim=2)
         R = torch.bmm(x_unfold.permute(0, 2, 1), x_unfold)
         # values = [B, H*W, 3]
@@ -40,5 +40,4 @@ class PatchMatch(nn.Module):
         attention_scores = torch.einsum('bnc,bnkc->bnk', Q, K) / (C ** 0.5)
         attention_weights = F.softmax(attention_scores, dim=2)
         output = torch.einsum('bnk,bnkc->bnc', attention_weights, V)
-        print(f"output.shape = {output.shape}")
-        return output
+        return output.reshape(B, H, W, C).permute(0, 3, 1, 2)

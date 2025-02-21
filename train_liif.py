@@ -104,10 +104,10 @@ def train(train_loader, model, optimizer):
             batch[k] = v.cuda()
 
         inp = (batch['inp'] - inp_sub) / inp_div
-        start_time = time.time()
+        # start_time = time.time()
         pred = model(inp, batch['coord'], batch['cell'])
-        time_diff = time.time() - start_time
-        print(f"batch elapse = {int((time_diff % 60)):02}.{int((time_diff % 1) * 100):02}")
+        # time_diff = time.time() - start_time
+        # print(f"batch elapse = {int((time_diff % 60)):02}.{int((time_diff % 1) * 100):02}")
         gt = (batch['gt'] - gt_sub) / gt_div
         loss = loss_fn(pred, gt)
 
@@ -209,10 +209,11 @@ def main(config_, save_path):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', default="./configs/aliif.yaml")
-    parser.add_argument('--name', default=None)
-    parser.add_argument('--tag', default=None)
-    parser.add_argument('--gpu', default='0, 1')
+    
+    parser.add_argument('--config', default="./configs/ciaosr/ciaosr.yaml")
+    parser.add_argument('--name', default='ciaosr')
+    parser.add_argument('--tag', default='1')
+    parser.add_argument('--gpu', default='0, 1, 2')
     args = parser.parse_args()
 
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu

@@ -1,28 +1,14 @@
-from collections import OrderedDict
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision.models.vgg as vgg
+from models import register
+
 def reduce_sum(x, axis=None, keepdim=False):
     if not axis:
         axis = range(len(x.shape))
     for i in sorted(axis, reverse=True):
         x = torch.sum(x, dim=i, keepdim=keepdim)
     return x
-
-class BasicBlock(nn.Sequential):
-    def __init__(
-        self, conv, in_channels, out_channels, kernel_size, stride=1, bias=True,
-        bn=False, act=nn.PReLU()):
-
-        m = [conv(in_channels, out_channels, kernel_size, bias=bias)]
-        if bn:
-            m.append(nn.BatchNorm2d(out_channels))
-        if act is not None:
-            m.append(act)
-
-        super(BasicBlock, self).__init__(*m)
 def same_padding(images, ksizes, strides, rates):
     assert len(images.size()) == 4
     batch_size, channel, rows, cols = images.size()
@@ -74,6 +60,21 @@ def default_conv(in_channels, out_channels, kernel_size,stride=1, bias=True):
     return nn.Conv2d(
         in_channels, out_channels, kernel_size,
         padding=(kernel_size//2),stride=stride, bias=bias)
+class BasicBlock(nn.Sequential):
+    def __init__(
+        self, conv, in_channels, out_channels, kernel_size, stride=1, bias=True,
+        bn=False, act=nn.PReLU()):
+
+        m = [conv(in_channels, out_channels, kernel_size, bias=bias)]
+        if bn:
+            m.append(nn.BatchNorm2d(out_channels))
+        if act is not None:
+            m.append(act)
+
+        super(BasicBlock, self).__init__(*m)
+
+
+@register('csa')
 class CrossScaleAttention(nn.Module):
     def __init__(self, channel=64, reduction=2, ksize=3, scale=2, stride=1, softmax_scale=10, average=True, conv=default_conv):
         super(CrossScaleAttention, self).__init__()

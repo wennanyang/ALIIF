@@ -1,3 +1,4 @@
+resume: /home/ywn/graduate/ALIIF/archive_models/pm0219/epoch-last.pth
 train_dataset:
   dataset:
     name: image-folder
@@ -79,4 +80,4 @@ multi_step_lr:
   gamma: 0.5
 
 epoch_val: 1
-epoch_save: 3
+epoch_save: 20

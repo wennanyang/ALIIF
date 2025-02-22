@@ -1,4 +1,3 @@
-resume: ./archive_models/train_0117/epoch-last.pth
 train_dataset:
   dataset:
     name: image-folder
@@ -63,7 +62,7 @@ model:
     nla_spec:
       name: nla
       args:
-        in_dim: 3
+        in_dim: 64
         K: 4
         scale: 4
         dims: [32, 64]

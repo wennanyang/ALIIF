@@ -210,9 +210,9 @@ def main(config_, save_path):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     
-    parser.add_argument('--config', default="./configs/ciaosr/ciaosr.yaml")
-    parser.add_argument('--name', default='ciaosr')
-    parser.add_argument('--tag', default='1')
+    parser.add_argument('--config', default="./configs/pm/ciao_pm.yaml")
+    parser.add_argument('--name', default='pm')
+    parser.add_argument('--tag', default='2')
     parser.add_argument('--gpu', default='0, 1, 2')
     args = parser.parse_args()
 

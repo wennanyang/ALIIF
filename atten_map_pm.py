@@ -49,24 +49,25 @@ def plt_and_save_map(model_path, img_path):
     x = points % H
     y = points // W
     plt.scatter(x, y, marker='o', s=20, color='white')
-    q_x = random_index % H + 0.5
-    q_y = random_index // W + 0.5
-    plt.scatter(q_x, q_y, marker='*',s=50 ,color='black')
+    q_x = random_index % H
+    q_y = random_index // W
+    plt.scatter(q_x + 0.5, q_y + 0.5, marker='*',s=50 ,color='black')
     plt.axis('off')
     plt.tight_layout(pad=3)
     plt.title(f"qx = {q_x}, qy = {q_y}")
+    print(np.array_equal(data, weights[0, :, :]))
     plt.savefig(f"./map/{CROP.parent.name}/attention_map{random_index}.png")
 
 if __name__ == '__main__':
     # monarch [130 : 130+292, 250 : 250+292, :]
     # zebra [30: 30+450, 100 : 100+450, :]
-    IMG = Path("../DATASET/benchmark/Set14/HR/monarch.png")
+    IMG = Path("../DATASET/benchmark/Set14/HR/zebra.png")
     PARENT = Path("./map").joinpath(IMG.name.split('.')[0])
     if not PARENT.exists():
         PARENT.mkdir()
-    img = cv2.imread("../DATASET/benchmark/Set14/HR/monarch.png")
+    img = cv2.imread(IMG)
     CROP = PARENT.joinpath("origin.png")
-    # img = cv2.resize(img[130 : 130+292, 250 : 250+292, :], (48, 48), interpolation=cv2.INTER_CUBIC)
-    # cv2.imwrite(PARENT.joinpath("origin.png"), img)
-    plt_and_save_map("./archive_models/pm0219/epoch-best.pth", CROP)
+    img = cv2.resize(img[30: 30+450, 100 : 100+450, :], (48, 48), interpolation=cv2.INTER_CUBIC)
+    cv2.imwrite(PARENT.joinpath("origin.png"), img)
+    plt_and_save_map("./archive_models/pm_2/epoch-best.pth", CROP)
 

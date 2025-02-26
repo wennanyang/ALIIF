@@ -27,7 +27,7 @@ class PatchMatch(nn.Module):
         B, C, H, W = x.shape
         # x_unfold = [B, C*9, H*W]
         x_unfold  = F.unfold(x, kernel_size=(3, 3), padding=1)
-        x_unfold = F.normalize(x_unfold, dim=2)
+        x_unfold = F.normalize(x_unfold, dim=1)
         R = torch.bmm(x_unfold.permute(0, 2, 1), x_unfold)
         # values = [B, H*W, 3]
         values, indices = torch.topk(R, k=3, dim=2)
@@ -48,7 +48,7 @@ class PatchMatch(nn.Module):
     def get_attention_map(self, x):
         B, C, H, W = x.shape
         x_unfold  = F.unfold(x, kernel_size=(3, 3), padding=1)
-        x_unfold = F.normalize(x_unfold, dim=2)
+        x_unfold = F.normalize(x_unfold, dim=1)
         R = torch.bmm(x_unfold.permute(0, 2, 1), x_unfold)
         _, indices = torch.topk(R, k=3, dim=2)
         return R, indices

@@ -86,7 +86,7 @@ def prepare_training():
     return model, optimizer, epoch_start, lr_scheduler
 
 
-def train(train_loader, model, optimizer):
+def train(train_loader, model, optimizer, save_name):
     model.train()
     loss_fn = nn.L1Loss()
     train_loss = utils.Averager()
@@ -99,7 +99,7 @@ def train(train_loader, model, optimizer):
     gt_sub = torch.FloatTensor(t['sub']).view(1, 1, -1).cuda()
     gt_div = torch.FloatTensor(t['div']).view(1, 1, -1).cuda()
 
-    for batch in tqdm(train_loader, leave=False, desc='train'):
+    for batch in tqdm(train_loader, leave=False, desc=f'{save_name} train'):
         for k, v in batch.items():
             batch[k] = v.cuda()
 
@@ -122,7 +122,7 @@ def train(train_loader, model, optimizer):
     return train_loss.item()
 
 
-def main(config_, save_path):
+def main(config_, save_path, save_name):
     global config, log, writer
     config = config_
     log, writer = utils.set_save_path(save_path)
@@ -151,10 +151,10 @@ def main(config_, save_path):
 
     for epoch in range(epoch_start, epoch_max + 1):
         t_epoch_start = timer.t()
-        log_info = ['epoch {}/{}'.format(epoch, epoch_max)]
+        log_info = ['folder {}, epoch {}/{}'.format(save_name, epoch, epoch_max)]
 
         writer.add_scalar('lr', optimizer.param_groups[0]['lr'], epoch)
-        train_loss = train(train_loader, model, optimizer)
+        train_loss = train(train_loader, model, optimizer, save_name)
         if lr_scheduler is not None:
             lr_scheduler.step()
 
@@ -210,8 +210,8 @@ def main(config_, save_path):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     
-    parser.add_argument('--config', default="./configs/pm/ciao_pm.yaml")
-    parser.add_argument('--name', default='pm')
+    parser.add_argument('--config', default="./configs/ciaosr/ciaosr.yaml")
+    parser.add_argument('--name', default='ciaosr')
     parser.add_argument('--tag', default='2')
     parser.add_argument('--gpu', default='0, 1, 2')
     args = parser.parse_args()
@@ -229,4 +229,4 @@ if __name__ == '__main__':
         save_name += '_' + args.tag
     save_path = os.path.join('./save', save_name)
 
-    main(config, save_path)
+    main(config, save_path, save_name)

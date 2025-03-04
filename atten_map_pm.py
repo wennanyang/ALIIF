@@ -29,7 +29,6 @@ def plt_and_save_map(model_path, img_path):
     '''
     临时方案
     '''
-    model_spec['name']='ciao_pm'
 
     model = models.make(model_spec, load_sd=True).cuda()
     # 

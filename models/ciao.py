@@ -26,7 +26,7 @@ class LocalImplicitSRNet(nn.Module):
         super().__init__()
 
         self.feat_unfold = feat_unfold
-        self.eval_bsize = 3000
+        self.eval_bsize = 30000
         self.local_size = local_size
         self.non_local_attn = non_local_attn
         self.multi_scale = multi_scale
@@ -295,7 +295,6 @@ class LocalImplicitSRNetPM(nn.Module):
             pred (Tensor): output of model.
         """
         feature = self.gen_feature(x)
-
         if self.eval_bsize is None or not test_mode:
             pred = self.query_rgb(feature, coord, cell)
         else:

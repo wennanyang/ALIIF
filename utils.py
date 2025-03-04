@@ -292,3 +292,10 @@ def ssim(img1, img2, crop_border=0, input_order='HWC', convert_to=None):
     for i in range(img1.shape[2]):
         ssims.append(_ssim(img1[..., i], img2[..., i]))
     return np.array(ssims).mean()
+
+
+if __name__ == '__main__':
+    img1 = cv2.imread("./data/TEST/HR/3096.png")
+    img2 = cv2.imread("./pred/3096.png")
+    print(f"PSNR = {psnr(img1, img2)}")
+    print(f"SSIM = {ssim(img1, img2)}")

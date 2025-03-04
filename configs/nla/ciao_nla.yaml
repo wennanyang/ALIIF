@@ -1,3 +1,4 @@
+resume: /home/ywn/graduate/ALIIF/archive_models/nla0110/nla_1/epoch-last.pth
 train_dataset:
   dataset:
     name: image-folder
